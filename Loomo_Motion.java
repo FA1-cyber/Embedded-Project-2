@@ -1,40 +1,163 @@
-package com.example.loomo_locomotion_demo;
+package com.example.loomo_speech;
+import androidx.appcompat.app.AppCompatActivity;
+
 import android.os.Bundle;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.snackbar.Snackbar;
 import com.segway.robot.algo.Pose2D;
 import com.segway.robot.algo.minicontroller.CheckPoint;
 import com.segway.robot.algo.minicontroller.CheckPointStateListener;
 import com.segway.robot.sdk.base.bind.ServiceBinder;
 import com.segway.robot.sdk.locomotion.sbv.Base;
+import com.segway.robot.sdk.voice.Recognizer;
+import com.segway.robot.sdk.voice.VoiceException;
+import com.segway.robot.sdk.voice.grammar.GrammarConstraint;
+import com.segway.robot.sdk.voice.grammar.Slot;
+import com.segway.robot.sdk.voice.recognition.RecognitionListener;
+import com.segway.robot.sdk.voice.recognition.RecognitionResult;
+import com.segway.robot.sdk.voice.recognition.WakeupListener;
+import com.segway.robot.sdk.voice.recognition.WakeupResult;
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
-
-import android.view.View;
-import android.view.Menu;
-import android.view.MenuItem;
+import java.util.LinkedList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-
+    Recognizer mRecognizer;
     Base mBase;
+    ServiceBinder.BindStateListener mRecognizerBindStateListener;
+    ServiceBinder.BindStateListener mBaseBindStateListener;
+    GrammarConstraint movementGrammar;
+    WakeupListener mWakeupListener;
+    RecognitionListener mRecognitionListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-
-        // Loomo Implementation
         mBase = Base.getInstance();
-        mBase.bindService(getApplicationContext(), new ServiceBinder.BindStateListener() {
+        mRecognizer = Recognizer.getInstance();
+        initListeners();
+
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        mRecognizer.bindService(getApplicationContext(), mRecognizerBindStateListener);
+        mBase.bindService(getApplicationContext(), mBaseBindStateListener);
+
+
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mRecognizer.unbindService();
+        mBase.unbindService();
+    }
+
+
+    private void initListeners() {
+
+        mRecognizerBindStateListener = new ServiceBinder.BindStateListener() {
             @Override
             public void onBind() {
+                try {
+                    initGrammar();
+                    // Wake-up and Recognition Mode
+                    mRecognizer.startRecognitionMode(mRecognitionListener);
+                    // Recognition only mode
+//                    mRecognizer.startRecognitionMode(mRecognitionListener);
+                } catch (VoiceException e) {}
+
+
+            }
+
+            @Override
+            public void onUnbind(String reason) {
+
+            }
+        };
+
+        mWakeupListener = new WakeupListener() {
+            @Override
+            public void onStandby() {
+
+            }
+
+            @Override
+            public void onWakeupResult(WakeupResult wakeupResult) {
+
+            }
+
+            @Override
+            public void onWakeupError(String error) {
+
+            }
+        };
+
+        mRecognitionListener = new RecognitionListener() {
+            @Override
+            public void onRecognitionStart() {
+
+            }
+
+            @Override
+            public boolean onRecognitionResult(RecognitionResult recognitionResult) {
+                String result = recognitionResult.getRecognitionResult();
+                baseOriginReset();
+                if (result.contains("rotate")) {
+                    if (result.contains("left")) {
+                        // rotate left
+                        mBase.addCheckPoint(0f,0f, (float) Math.PI/2);
+                    } else if (result.contains("right")) {
+                        // rotate right
+                        mBase.addCheckPoint(0f, 0f, (float) (-1*Math.PI)/2);
+                    }
+
+                } else if (result.contains("move") || result.contains("go") || result.contains("turn")) {
+                    if (result.contains("forward")) {
+                        mBase.addCheckPoint(0.5f, 0f);
+//                        initListeners();
+                    } else if (result.contains("backward")) {
+                        mBase.addCheckPoint(-0.5f, 0f);
+                    } else if ( result.contains("left")) {
+                        mBase.addCheckPoint(0f, 0.5f);
+                    } else if (result.contains("right")) {
+                        mBase.addCheckPoint(0f, -0.5f);
+                    }
+                    else if (result.contains("stop")) {
+                        mBase.setLinearVelocity(0f);
+                    }
+//                    mBase.addCheckPoint(1f,0);
+//                    initListeners();
+//                    mBase.addCheckPoint(1f,0.5f);
+//                    initListeners();
+//                    mBase.addCheckPoint(0f,0.5f);
+//                    initListeners();
+//                    mBase.addCheckPoint(0f,1f);
+//                    initListeners();
+//                    mBase.addCheckPoint(1f,1f);
+//                    initListeners();
+                }
+                return true;
+            }
+
+            @Override
+            public boolean onRecognitionError(String error) {
+                return true;
+            }
+        };
+
+
+
+        mBaseBindStateListener = new ServiceBinder.BindStateListener() {
+            @Override
+            public void onBind() {
+                mBase.setControlMode(Base.CONTROL_MODE_NAVIGATION);
                 mBase.setOnCheckPointArrivedListener(new CheckPointStateListener() {
                     @Override
                     public void onCheckPointArrived(CheckPoint checkPoint, Pose2D realPose, boolean isLast) {
+                        baseOriginReset();
 
                     }
 
@@ -44,79 +167,45 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-
             }
 
             @Override
             public void onUnbind(String reason) {
 
             }
-        });
+        };
 
-        FloatingActionButton fab = findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                mBase.setControlMode(Base.CONTROL_MODE_RAW);
-                mBase.setLinearVelocity(1f);
-
-                mBase.setControlMode(Base.CONTROL_MODE_NAVIGATION);
-                mBase.cleanOriginalPoint();
-                Pose2D pose2D = mBase.getOdometryPose(-1);
-                mBase.setOriginalPoint(pose2D);
-                mBase.addCheckPoint(1f,0);
-                mBase.addCheckPoint(1f,0.5f);
-                mBase.addCheckPoint(0f,0.5f);
-                mBase.addCheckPoint(0f,1f);
-                mBase.addCheckPoint(1f,1f);
-
-                mBase.addCheckPoint(1f,1.5f);
-                mBase.addCheckPoint(0f,1.5f);
-                mBase.addCheckPoint(0f,2f);
-                mBase.addCheckPoint(1f,2f);
-                mBase.addCheckPoint(1f,2.5f);
-
-                mBase.addCheckPoint(0f,2.5f);
-
-//                mBase.addCheckPoint(1f,3f);
-               /* mBase.addCheckPoint(0.5f,0);
-                mBase.addCheckPoint(0f, 0f, (float) (Math.PI /2));
-                mBase.addCheckPoint(2f,0);*/
-
-//                mBase.addCheckPoint(0, 0, (float) (Math.PI /2));
-               /* mBase.addCheckPoint(2f, 2f, (float) (Math.PI));
-                mBase.addCheckPoint(1f, 0, (float) (Math.PI /2));
-                mBase.addCheckPoint(0.5f, 0.5f, (float) (Math.PI));
-                mBase.addCheckPoint(1f, 0, (float) (Math.PI /2));
-                mBase.addCheckPoint(2f, 2f, (float) (Math.PI));*/
-
-                // mBase.addCheckPoint(0f, 1f, (float) (-Math.PI /2));
-                //mBase.addCheckPoint(0, 0, 0);
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
+    private void initGrammar() throws VoiceException {
+        Slot firstSlot = new Slot("movement");
+        firstSlot.addWord("move");
+        firstSlot.addWord("go");
+        firstSlot.addWord("turn");
+        firstSlot.addWord("rotate");
+
+        Slot secondSlot = new Slot("direction");
+        secondSlot.addWord("forward");
+        secondSlot.addWord("backward");
+        secondSlot.addWord("left");
+        secondSlot.addWord("right");
+        secondSlot.addWord("stop");
+
+        List<Slot> movementSlotList = new LinkedList<>();
+        movementSlotList.add(firstSlot);
+        movementSlotList.add(secondSlot);
+
+        movementGrammar = new GrammarConstraint("movements", movementSlotList);
+        mRecognizer.addGrammarConstraint(movementGrammar);
+
+
     }
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
+    private void baseOriginReset() {
+        mBase.setControlMode(Base.CONTROL_MODE_NAVIGATION);
+        //mBase.clearCheckPointsAndStop();
+        mBase.cleanOriginalPoint();
+        Pose2D newOriginPoint = mBase.getOdometryPose(-1);
+        mBase.setOriginalPoint(newOriginPoint);
     }
 }
