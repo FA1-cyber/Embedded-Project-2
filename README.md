@@ -8,7 +8,6 @@
   RCC set to Crystal/Ceramic Resonator.
   SYS set to Serial Wire.
   Picture of the configuration: https://drive.google.com/file/d/1steU1Vv7ZO_chwA7Wr9h4wtD2ooD69ww/view?usp=sharing
-  
 2. Generate code from CubeMX
 3. Copy the codes from the main.c and stm3214xx_it.c to the designted files
 4. Download the program to the STM microcontroller  
