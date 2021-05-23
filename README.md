@@ -1,7 +1,7 @@
 # Embedded-Project-2
 
 ## How to build the project
-1.Open CubeMX and create the following configurations: 
+ 1.Open CubeMX and create the following configurations: 
   USART1_RX and USART1_TX are used for receiving the coordinates from the GPS module.
   USART2_RX and USART2_TX are used to transmit the coordinates to the mobile phone using the Bluetooth module.
   GPIO_Input is used to get a value from the metal sensor to check whether a metal is detected or not (1 - metal detected, 0 - no metal).
